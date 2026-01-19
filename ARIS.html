@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AR English Eat (Mini)</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+<style>
+body{margin:0;overflow:hidden;background:#111;color:white}
+canvas{position:absolute;inset:0}
+</style>
+</head>
+
+<body>
+<!-- HUD -->
+<div class="absolute top-2 left-1/2 -translate-x-1/2 bg-black/60 px-4 py-2 rounded-xl z-10 text-center">
+  <div id="q" class="text-yellow-400 font-bold">Loading...</div>
+  <div id="score" class="text-sm">Score: 0</div>
+</div>
+
+<video hidden playsinline></video>
+<canvas id="cv"></canvas>
+
+<script>
+/* ===== DATA ===== */
+const questions = [
+ {q:"We ___ students", c:"are", w:["is","am"]},
+ {q:"Past of Eat", c:"ate", w:["eated","eating"]},
+ {q:"Opposite of big", c:"small", w:["long","high"]}
+];
+
+/* ===== STATE ===== */
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+const video = document.querySelector("video");
+let score = 0, qi = 0, items = [];
+let mouth = {x:0,y:0,open:false};
+
+/* ===== UI ===== */
+const qBox = document.getElementById("q");
+const scoreBox = document.getElementById("score");
+
+function nextQ(){
+ if(qi>=questions.length){alert("Game Over! Score "+score);return;}
+ qBox.innerText = questions[qi].q;
+ items=[];
+}
+
+/* ===== GAME ===== */
+function spawn(){
+ const q = questions[qi];
+ const ok = !items.some(i=>i.ok);
+ const text = ok ? q.c : q.w[Math.floor(Math.random()*2)];
+ items.push({
+  x:Math.random()*cv.width,
+  y:-40,
+  t:text,
+  ok
+ });
+}
+
+function update(){
+ if(Math.random()<0.02 && items.length<3) spawn();
+
+ items.forEach(it=>{
+  it.y+=2;
+  const d=Math.hypot(it.x-mouth.x,it.y-mouth.y);
+  if(mouth.open && d<60){
+    score+= it.ok?10:-5;
+    scoreBox.innerText="Score: "+score;
+    if(it.ok) qi++, nextQ();
+    it.dead=true;
+  }
+ });
+
+ items = items.filter(i=>!i.dead && i.y<cv.height+50);
+}
+
+function draw(){
+ ctx.clearRect(0,0,cv.width,cv.height);
+ ctx.save();
+ ctx.scale(-1,1);
+ ctx.drawImage(video,-cv.width,0,cv.width,cv.height);
+ ctx.restore();
+
+ items.forEach(i=>{
+  ctx.beginPath();
+  ctx.arc(i.x,i.y,30,0,Math.PI*2);
+  ctx.fillStyle=i.ok?"#fff":"#ccc";
+  ctx.fill();
+  ctx.strokeStyle=i.ok?"#7c3aed":"#ef4444";
+  ctx.stroke();
+  ctx.fillStyle="#000";
+  ctx.textAlign="center";
+  ctx.textBaseline="middle";
+  ctx.fillText(i.t,i.x,i.y);
+ });
+
+ ctx.beginPath();
+ ctx.arc(mouth.x,mouth.y,8,0,Math.PI*2);
+ ctx.fillStyle=mouth.open?"#22c55e":"#ef4444";
+ ctx.fill();
+}
+
+/* ===== AR ===== */
+const faceMesh = new FaceMesh({
+ locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`
+});
+faceMesh.setOptions({maxNumFaces:1});
+
+faceMesh.onResults(r=>{
+ if(!r.multiFaceLandmarks) return;
+ const lm=r.multiFaceLandmarks[0];
+ const u=lm[13], l=lm[14];
+ const h=Math.hypot(lm[10].y-lm[152].y);
+ const m=Math.hypot(u.y-l.y);
+ mouth.open = m/h > 0.03;
+ mouth.x = (1-(u.x+l.x)/2)*cv.width;
+ mouth.y = ((u.y+l.y)/2)*cv.height;
+ update(); draw();
+});
+
+/* ===== CAMERA ===== */
+const cam=new Camera(video,{
+ onFrame:()=>faceMesh.send({image:video}),
+ width:640,height:480
+});
+cam.start();
+
+function resize(){
+ cv.width=innerWidth; cv.height=innerHeight;
+}
+addEventListener("resize",resize); resize();
+nextQ();
+</script>
+</body>
+</html>

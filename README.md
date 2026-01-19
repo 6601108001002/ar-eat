@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-    <title>AR English Eat - Easy Speech Edition</title>
+    <title>AR English Eat - Fast Camera Edition</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
@@ -40,14 +40,14 @@
             70% { box-shadow: 0 0 0 15px rgba(168, 85, 247, 0); transform: scale(1.05); }
             100% { box-shadow: 0 0 0 0 rgba(168, 85, 247, 0); transform: scale(1); }
         }
-        #loading-overlay { transition: opacity 0.5s ease-out; }
+        #loading-overlay { transition: opacity 0.3s ease-out; }
     </style>
 </head>
 <body class="h-screen w-screen overflow-hidden font-sans select-none">
 
     <div id="loading-overlay" class="fixed inset-0 z-[200] bg-slate-900 flex flex-col justify-center items-center pointer-events-none opacity-0">
         <div class="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p class="text-purple-300 font-bold">กำลังเปิดกล้อง...</p>
+        <p class="text-purple-300 font-bold">กำลังเชื่อมต่อกล้อง...</p>
     </div>
 
     <div id="screen-menu" class="absolute inset-0 z-[100] bg-slate-900 flex flex-col justify-center items-center p-6 text-center">
@@ -104,7 +104,7 @@
             </div>
         </div>
 
-        <!-- Speech Layer (Improved) -->
+        <!-- Speech Layer -->
         <div id="screen-speech" class="absolute inset-0 bg-black/95 z-[120] hidden flex flex-col justify-center items-center p-6 text-center">
             <div class="text-purple-400 text-sm font-bold tracking-widest mb-2 uppercase">ออกเสียงดังๆ:</div>
             <div id="speech-target" class="text-7xl font-black mb-4 text-white uppercase scale-110 tracking-tight">...</div>
@@ -114,7 +114,6 @@
                 <span id="mic-emoji" class="text-5xl">🎙️</span>
             </div>
 
-            <!-- Audio Power Bar -->
             <div class="w-full max-w-xs bg-slate-800/50 rounded-full h-2 mb-4 overflow-hidden border border-slate-700">
                 <div id="audio-bar" class="h-full bg-purple-400 w-0 transition-all duration-75"></div>
             </div>
@@ -186,23 +185,38 @@ window.startAction = async () => {
 
 async function initAR() {
     const videoElement = document.getElementById('input-video');
-    const faceMesh = new FaceMesh({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}` });
+    const faceMesh = new FaceMesh({ 
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}` 
+    });
     
-    faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+    faceMesh.setOptions({ 
+        maxNumFaces: 1, 
+        refineLandmarks: true, 
+        minDetectionConfidence: 0.5, 
+        minTrackingConfidence: 0.5 
+    });
+    
     faceMesh.onResults(onResults);
     
+    // ตั้งค่ากล้องให้เร็วขึ้นด้วยการคุมความละเอียดให้พอเหมาะกับ AR
     const camera = new Camera(videoElement, {
-        onFrame: async () => { await faceMesh.send({image: videoElement}); },
-        width: 640, height: 480 
+        onFrame: async () => { 
+            await faceMesh.send({image: videoElement}); 
+        },
+        width: 480, height: 360 // ลดความละเอียดเริ่มต้นเพื่อให้เปิดได้เร็วขึ้นแต่ยังชัดเจนสำหรับ AR
     });
 
     const canv = document.getElementById('output-canvas');
-    canv.width = window.innerWidth; canv.height = window.innerHeight;
+    canv.width = window.innerWidth; 
+    canv.height = window.innerHeight;
 
     return camera.start().then(() => {
         state.active = true;
         document.getElementById('hud').style.opacity = "1";
         updateUI();
+    }).catch(err => {
+        console.error("Camera error:", err);
+        alert("ไม่สามารถเปิดกล้องได้ กรุณาตรวจสอบสิทธิ์การเข้าถึงกล้อง");
     });
 }
 
@@ -275,13 +289,11 @@ function initSpeechRecognition() {
         const transcript = e.results[e.results.length-1][0].transcript.toLowerCase().trim();
         const target = document.getElementById('speech-target').innerText.toLowerCase();
         
-        // Visual Bar Feedback (Simulated from transcript length for responsiveness)
         const vol = Math.min(100, transcript.length * 15);
         document.getElementById('audio-bar').style.width = vol + '%';
         
         document.getElementById('speech-feedback').innerText = `ได้ยิน: "${transcript}"`;
         
-        // FUZZY MATCH LOGIC
         const isMatch = transcript.includes(target) || 
                         (transcript.length >= 3 && target.startsWith(transcript.substring(0,3))) ||
                         fuzzyCheck(transcript, target);
@@ -293,7 +305,6 @@ function initSpeechRecognition() {
     return rec;
 }
 
-// Easy mode fuzzy helper
 function fuzzyCheck(heard, target) {
     if (target === "goes" && (heard.includes("go") || heard.includes("ghost"))) return true;
     if (target === "teacher" && (heard.includes("teach") || heard.includes("shirt"))) return true;
@@ -363,7 +374,10 @@ function finish() {
     document.getElementById('final-score').innerText = state.score;
 }
 
-window.onresize = () => { ctx.canvas.width = window.innerWidth; ctx.canvas.height = window.innerHeight; };
+window.onresize = () => { 
+    ctx.canvas.width = window.innerWidth; 
+    ctx.canvas.height = window.innerHeight; 
+};
 </script>
 </body>
 </html>

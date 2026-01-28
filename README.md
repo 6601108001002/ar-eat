@@ -17,12 +17,13 @@
         .btn-game:active { transform: translateY(4px); box-shadow: 0 0 0 #581c87; }
         .loader { width: 40px; height: 40px; border: 4px solid #FFF; border-bottom-color: #a855f7; border-radius: 50%; animation: rot 1s linear infinite; }
         @keyframes rot { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .floating { animation: float 3s ease-in-out infinite; }
         @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+        .floating { animation: float 3s ease-in-out infinite; }
     </style>
 </head>
 <body class="h-screen w-screen overflow-hidden text-white select-none">
 
+    <!-- Game Layer -->
     <div id="game-container" class="relative w-full h-full flex justify-center items-center">
         <video class="hidden" playsinline></video>
         <canvas id="output-canvas" class="absolute inset-0"></canvas>
@@ -41,13 +42,14 @@
                         <div class="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center font-bold text-xl shadow-lg" id="score-box">0</div>
                         <div class="text-xs text-gray-300"><div class="font-bold text-white">SCORE</div><div id="player-label">Guest</div></div>
                     </div>
+                    <button onclick="readQuestion()" class="pointer-events-auto bg-white/10 p-2 rounded-full hover:bg-white/20 active:scale-95">🔊 โจทย์</button>
                 </div>
                 <div id="question-text" class="text-center text-yellow-300 text-lg md:text-xl font-bold py-1 bg-black/20 rounded-lg">Loading...</div>
             </div>
-            <div id="toast" class="self-center glass px-6 py-2 rounded-full text-sm font-bold text-white hidden animate-bounce"></div>
+            <div id="toast" class="self-center glass px-6 py-2 rounded-full text-sm font-bold text-red-400 hidden animate-bounce">Wrong!</div>
         </div>
 
-        <!-- Login -->
+        <!-- Login Screen -->
         <div id="screen-login" class="absolute inset-0 bg-[#0f172a] z-50 flex flex-col justify-center items-center p-6">
             <button onclick="openAdmin()" class="absolute top-4 right-4 text-xs text-gray-500 pointer-events-auto">🔒 Admin</button>
             <div class="text-center mb-6 floating">
@@ -89,7 +91,7 @@
             </div>
         </div>
 
-        <!-- Speech Interaction (Restored) -->
+        <!-- Speech -->
         <div id="screen-speech" class="absolute inset-0 bg-black/90 z-30 hidden flex-col justify-center items-center text-center p-6 backdrop-blur-md">
             <h2 class="text-xl text-purple-300 font-bold mb-2">พูดคำนี้</h2>
             <div id="sp-word" class="text-5xl font-extrabold text-white mb-2 tracking-wide drop-shadow-lg">...</div>
@@ -160,16 +162,17 @@ window.loadAdminData = async () => {
 const CFG = { gravity: 1.5, spawnRate: 110, eatDist: 100, mouthThresh: 0.04 };
 window.G = { playing: false, score: 0, qIdx: 0, items: [], history: [], mouth: {x:0, y:0, open:false}, user: {name:'', number:''}, pendingItem: null };
 
+// QUESTIONS: Cleaned up (No phonetic, just Meaning 'm')
 const QUESTIONS = [
     { q: "Yesterday, I ___ to school.", c: "went", w: ["go","goes"], m: "ไป (อดีต)" },
-    { q: "I don't have ___ money.", c: "any", w: ["some","a"], m: "บ้าง (ปฏิเสธ)" },
+    { q: "I don't have ___ money.", c: "any", w: ["some","a"], m: "บ้าง (ใช้ในประโยคปฏิเสธ)" },
     { q: "This book is ___.", c: "mine", w: ["my","me"], m: "ของฉัน" },
     { q: "Opposite of 'Small'", c: "Big", w: ["Short","Long"], m: "ใหญ่" },
     { q: "A ___ teaches students.", c: "Teacher", w: ["Doctor","Pilot"], m: "ครู" },
-    { q: "___ you speak English?", c: "Do", w: ["Are","Is"], m: "ใช้ถามกริยา" },
+    { q: "___ you speak English?", c: "Do", w: ["Are","Is"], m: "ใช้นำหน้าประโยคคำถาม" },
     { q: "She is ___ than me.", c: "taller", w: ["tall","tallest"], m: "สูงกว่า" },
-    { q: "See you ___ Monday.", c: "on", w: ["in","at"], m: "ใช้กับ วัน" },
-    { q: "We ___ eating now.", c: "are", w: ["is","do"], m: "ใช้กับ We" },
+    { q: "See you ___ Monday.", c: "on", w: ["in","at"], m: "ใช้กับ วัน (จันทร์-อาทิตย์)" },
+    { q: "We ___ eating now.", c: "are", w: ["is","do"], m: "เป็น/อยู่/คือ (ใช้กับ We)" },
     { q: "Fish ___ in water.", c: "swim", w: ["fly","run"], m: "ว่ายน้ำ" }
 ];
 
@@ -241,16 +244,15 @@ function handleEat(item, idx) {
         document.getElementById('screen-speech').classList.remove('hidden');
         document.getElementById('screen-speech').classList.add('flex');
         document.getElementById('sp-word').innerText = item.text;
-        document.getElementById('sp-meaning').innerText = q.m;
+        document.getElementById('sp-meaning').innerText = q.m; // Just meaning
         startSpeech();
     } else {
         G.items.splice(idx, 1); G.score = Math.max(0, G.score - 5); updateHUD();
-        showToast(`ผิด! ${item.text} (-5)`, 'red');
+        showToast(`กินผิด! ${item.text} -5`, 'red');
         G.history.push({q:QUESTIONS[G.qIdx].q, ans:item.text, res:'Wrong'});
     }
 }
 
-// RESTORED SPEECH LOGIC
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition;
 
@@ -261,7 +263,6 @@ function startSpeech() {
         recognition = new SpeechRecognition(); recognition.lang = 'en-US'; recognition.interimResults = true;
         recognition.onresult = (e) => {
             const t = e.results[e.results.length-1][0].transcript.toLowerCase(), target = G.pendingItem.text.toLowerCase();
-            // EASY MATCH: Exact, Includes, or First char match
             if (t.includes(target) || target.includes(t) || (t[0]===target[0] && Math.abs(t.length-target.length)<3)) {
                 recognition.stop(); endSpeech(true);
             }
@@ -274,9 +275,8 @@ function endSpeech(success) {
     if (recognition) try{recognition.stop()}catch(e){};
     document.getElementById('screen-speech').classList.add('hidden');
     document.getElementById('screen-speech').classList.remove('flex');
-    const bonus = success ? 5 : 0;
-    G.score += (10 + bonus);
-    showToast(success ? `เยี่ยม! +${10+bonus}` : `ผ่าน! +10`, 'green');
+    G.score += (10 + (success?5:0));
+    showToast(success ? `เยี่ยม! +${15}` : `ผ่าน! +10`, 'green');
     G.history.push({q:QUESTIONS[G.qIdx].q, ans:G.pendingItem.text, res:'Correct'});
     if (++G.qIdx >= QUESTIONS.length) finishGame();
     else { G.playing = true; loadLevel(); gameLoop(); }
@@ -300,7 +300,7 @@ function realStart() {
 
 function loadLevel() {
     document.getElementById('question-text').innerText = `${G.qIdx+1}. ${QUESTIONS[G.qIdx].q}`;
-    updateHUD();
+    updateHUD(); readQuestion();
 }
 
 function finishGame() {
@@ -311,7 +311,8 @@ function finishGame() {
 }
 
 function updateHUD() { document.getElementById('score-box').innerText = G.score; }
-function showToast(msg, c) { const t=document.getElementById('toast'); t.innerText=msg; t.className=`self-center glass px-6 py-2 rounded-full text-sm font-bold animate-bounce ${c==='green'?'text-green-400':'text-red-400'}`; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'),2000); }
+function showToast(msg, c) { const t=document.getElementById('toast'); t.innerText=msg; t.className=`self-center glass px-6 py-2 rounded-full text-sm font-bold animate-bounce text-${c}-400`; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'),2000); }
+window.readQuestion = () => { if(G.playing) { const u = new SpeechSynthesisUtterance(QUESTIONS[G.qIdx].q); u.lang='en-US'; speechSynthesis.speak(u); }};
 
 window.openAdmin = () => { document.getElementById('screen-admin').classList.remove('hidden'); document.getElementById('screen-admin').classList.add('flex'); };
 window.closeAdmin = () => { document.getElementById('screen-admin').classList.add('hidden'); document.getElementById('screen-admin').classList.remove('flex'); };
